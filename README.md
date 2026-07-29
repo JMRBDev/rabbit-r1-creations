@@ -1,71 +1,68 @@
 # rabbit-r1-creations
 
-A minimal **Hello World** [R1 Creation](https://rabbit.tech/creations) for the Rabbit R1, plus a self-hosted QR generator to install it onto a personal device.
+A collection of [Rabbit R1 Creations](https://rabbit.tech/creations) — small static web apps built for the R1's 240×282 screen. Anyone can fork this and host their own.
 
-## What's here
+> Building a new Creation, or modifying one? Read **[AGENTS.md](./AGENTS.md)** first — it's the source of truth for conventions, the full Creations SDK reference, and the gotchas that will bite you.
+
+## What's in this repo
 
 ```
-.
-├── hello-world/      # the Creation: a 240x282 static page + Creations SDK demo
-└── qr-generator/     # self-host tool that builds the install QR (from rabbit-hmi-oss)
+creations/<name>/   each Creation is a folder with three files:
+├── index.html         markup + <link>/<script> references
+├── styles.css         all CSS
+└── app.js             all JS
+lib/fonts/          shared Power Grotesk (WOFF2) — the R1's native typeface, used by every Creation
+lib/shared/         shared reset.css — box-model reset, 240×282 dark viewport, palette tokens
+qr-generator/       self-host tool that builds the install QR codes (not a Creation itself)
 ```
 
-The Creation is a single static HTML file sized exactly to the R1 screen (240x282). It demonstrates the [Creations SDK](https://github.com/rabbit-hmi-oss/creations-sdk/blob/main/plugin-demo/reference/creation-triggers.md):
+Current creations: `hello-world` (SDK demo: scroll counter + PTT-to-speak) and `camera` (live preview, wheel-driven camera switching, persistent gallery).
 
-- **Scroll wheel** → live counter (`scrollUp` / `scrollDown` window events)
-- **Side button (PTT)** → asks the on-device LLM to speak via `PluginMessageHandler` + `wantsR1Response: true`
-- **`window.onPluginMessage`** → receives the server reply
-- Gracefully degrades to a static page when opened in a normal browser (SDK not present)
-
-## How R1 Creations install works
-
-The R1 camera scans a **QR code that encodes a JSON object**, not a plain URL:
-
-```json
-{ "title": "Hello World", "url": "<your hosted index.html>", "description": "...", "iconUrl": "", "themeColor": "#FE5000" }
-```
-
-The device reads that JSON and loads `url` as a 240x282 WebView. So you need (1) the page hosted at a public HTTPS URL, and (2) a QR encoding that JSON pointing at it.
-
-## Step 1 — Host the Creation publicly (free via GitHub Pages)
-
-1. Push this folder to a GitHub repo (e.g. `rabbit-r1-creations`).
-2. Repo → **Settings → Pages** → Source: **Deploy from a branch** → `main` / `/root`.
-3. Wait ~1 min. Your Creation URL will be:
-
-   `https://<your-username>.github.io/rabbit-r1-creations/hello-world/`
-
-> Any static host with HTTPS works (Netlify, Vercel, Cloudflare Pages). The R1 must reach the URL from the internet. localhost won't do.
-
-## Step 2 — Generate the install QR
-
-Open `qr-generator/index.html` in any browser (just double-click it; it's fully client-side), then fill in:
-
-| Field        | Value                                                   |
-| ------------ | ------------------------------------------------------- |
-| Title        | `Hello World`                                           |
-| URL          | `https://<your-username>.github.io/.../hello-world/`    |
-| Description  | `my first r1 creation`                                  |
-| Icon URL     | (leave blank)                                           |
-| Theme Color  | `#FE5000`                                               |
-
-Click **Generate QR Code**, then **Download**. The PNG encodes the JSON payload above.
-
-## Step 3 — Install on your R1
-
-1. On the R1, open the **camera / creation scanner** (from the creations flow at `rabbit.tech/creations`: *"scan the QR code with your r1 to install it"*).
-2. Point it at the generated QR.
-3. The Creation installs and opens. Scroll the wheel → counter moves; press the side button → the R1 speaks.
-
-## Run locally for development
+## Quick start (local dev)
 
 ```bash
 python3 -m http.server 8000
 ```
 
-Then visit `http://localhost:8000/hello-world/`. In a desktop browser you'll see the static page (counter/voice are inert since `PluginMessageHandler` only exists inside the R1 WebView).
+Then open a Creation, e.g. <http://localhost:8000/creations/hello-world/>.
 
-## Notes / caveats
+R1 Creations run inside the device WebView. In a desktop browser the hardware/voice bridges don't exist, so creations detect `typeof PluginMessageHandler === 'undefined'` and surface on-screen test controls instead. See [Testing](./AGENTS.md#testing).
 
-- The SDK README still says *"Soon"* — full docs aren't published. This demo uses only the documented JS channels (`PluginMessageHandler`, `window.onPluginMessage`, `scrollUp/Down`, `sideClick`).
-- Sideloading via self-hosted QR is supported by the bundled `qr` tool; whether your device firmware accepts arbitrary URLs without gallery listing is best confirmed by the scan itself (Step 3).
+## How an R1 Creation works
+
+A Creation is just a static web page sized to **240×282 px**. It talks to the device through a small set of JavaScript bridges (the Creations SDK): `PluginMessageHandler`, `window.creationStorage`, `window.creationSensors`, plus hardware events (`scrollUp` / `scrollDown` / `sideClick` / `longPressStart` / `longPressEnd`). Full API: [Creations SDK reference](./AGENTS.md#creations-sdk-reference).
+
+There is **no** SDK channel for the R1's motorized camera rotation, for WebSockets, or for arbitrary native calls — only the bridges above plus standard web APIs (`getUserMedia`, etc.).
+
+## Install a Creation on your R1
+
+The R1 installs a Creation by scanning a QR that encodes a **JSON object** (not a bare URL):
+
+```json
+{ "title": "Hello World", "url": "https://<your-domain>/creations/hello-world/",
+  "description": "my first r1 creation", "iconUrl": "", "themeColor": "#FE5000" }
+```
+
+1. Host the repo at a **public HTTPS URL**. On GitHub Pages you can use the default `https://<user>.github.io/<repo>/`, or set a custom domain via a `CNAME` file.
+2. Open `qr-generator/index.html` locally, enter title + URL (+ description, themeColor), **Generate**, **Download**.
+3. Scan the QR with the R1's creation scanner. Done.
+
+## Typography
+
+Every Creation renders in **Power Grotesk** on a shared dark base. Load the font, then the shared reset, then the Creation's own styles (in that order):
+
+```html
+<link rel="stylesheet" href="../../lib/fonts/fonts.css">
+<link rel="stylesheet" href="../../lib/shared/reset.css">
+<link rel="stylesheet" href="styles.css">
+```
+
+`reset.css` provides the box-model reset, the 240×282 dark viewport, the font stack, and the R1 palette tokens (`--accent`, `--bg`, `--text`, …) — so each Creation's `styles.css` only holds its own component styles.
+
+Only WOFF2 is shipped (smallest payload for limited hardware; supported by the R1's Chromium WebView), and only the weights actually used: **400 Regular, 700 Bold, 800 Heavy**. The browser fetches weights on demand.
+
+## Known limitations
+
+- The Creations SDK README is still marked *"Soon"*; the API surface used here is the documented set only.
+- Sideloading via a self-hosted QR is supported by the bundled `qr-generator`; whether a given firmware accepts arbitrary non-gallery URLs is confirmed by the scan itself.
+- Power Grotesk ships under its **trial license** (upright cuts only — no italics bundled).
