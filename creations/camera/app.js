@@ -21,7 +21,7 @@
   var switchPulse = document.getElementById("switch-pulse");
   var camErr = document.getElementById("cam-err");
 
-  var cameras = [];
+  var cams = [];
   var camIndex = 0;
   var stream = null;
   var mode = "capture";
@@ -74,7 +74,7 @@
     document.getElementById("cam-meta").textContent = (cams.length > 1 ? (camIndex + 1) + "/" + cams.length + " " : "") + c.label;
     camErr.style.display = "none";
 
-    var constraints = { video: c.deviceId ? { deviceId: { exact: c.deviceId } } : { facingMode: "environment" }, audio: false };
+    var constraints = { video: c.deviceId ? { deviceId: { exact: c.deviceId } } : { facingMode: { ideal: "environment" } }, audio: false };
     stopCamera();
     return navigator.mediaDevices.getUserMedia(constraints).then(function (s) {
       stream = s;
