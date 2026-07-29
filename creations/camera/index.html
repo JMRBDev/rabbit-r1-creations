@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=240, initial-scale=1.0, user-scalable=no">
+  <title>R1 Camera</title>
+  <link rel="stylesheet" href="../../lib/fonts/fonts.css">
+  <link rel="stylesheet" href="../../lib/shared/reset.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- CAPTURE -->
+  <section id="screen-capture" class="screen active">
+    <div class="topbar">
+      <span class="tag">cam</span>
+      <span class="meta" id="cam-meta">—</span>
+      <span class="hint">hold: gallery</span>
+    </div>
+    <div id="viewfinder">
+      <video id="cam" autoplay playsinline muted></video>
+      <div class="vf-overlay"><div class="reticle"></div></div>
+      <div class="switch-pulse" id="switch-pulse"></div>
+      <div class="flash" id="flash"></div>
+      <div class="err" id="cam-err" style="display:none"></div>
+    </div>
+    <div class="shutter"><div class="shutter-btn" id="shutter"></div></div>
+  </section>
+
+  <!-- GALLERY GRID -->
+  <section id="screen-grid" class="screen">
+    <div class="topbar">
+      <span class="tag">gallery</span>
+      <span class="meta" id="gal-meta">0</span>
+      <span class="hint">hold: camera</span>
+    </div>
+    <div class="grid" id="grid"></div>
+  </section>
+
+  <!-- GALLERY FULLSCREEN -->
+  <section id="screen-full" class="screen">
+    <div class="topbar">
+      <span class="tag">photo</span>
+      <span class="meta" id="full-meta">1/1</span>
+      <span class="hint">hold: delete</span>
+    </div>
+    <div class="stage"><img id="full-img" alt=""></div>
+    <div class="fullbar">PTT &nbsp;back to grid</div>
+  </section>
+
+  <div class="banner" id="banner"></div>
+  <div class="devbar" id="devbar">
+    <button data-d="up">wheel▲</button>
+    <button data-d="down">wheel▼</button>
+    <button data-d="ptt">PTT</button>
+    <button data-d="long">LONG</button>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
