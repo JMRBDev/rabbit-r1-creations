@@ -11,6 +11,7 @@
   var flashToggle = $("flash-toggle");
   var switchPulse = $("switch-pulse");
   var camErr = $("cam-err");
+  var camPrompt = $("cam-prompt");
   var fullImg = $("full-img");
   var fullStage = document.querySelector("#screen-full .stage");
 
@@ -18,6 +19,8 @@
   var camIndex = 0;
   var stream = null;
   var starting = false;
+  var startTries = 0;
+  var MAX_TRIES = 3;
   var mode = "capture";
   var isSelfie = false;
   var flashOn = false;
@@ -90,6 +93,7 @@
       ? cams[(i + cams.length) % cams.length]
       : { deviceId: "", face: "", label: "default" };
     camIndex = cams.length ? (i + cams.length) % cams.length : 0;
+    hideStartPrompt();
     camErr.style.display = "none";
     stopCamera();
     return navigator.mediaDevices
@@ -106,17 +110,32 @@
         var fm = s.getVideoTracks()[0]?.getSettings?.().facingMode || "";
         if (fm === "user" || fm === "environment") c.face = fm === "user" ? "user" : "env";
         applySelfie(c.face === "user");
+        startTries = 0;
+        hideStartPrompt();
       })
-      .catch((e) => {
+      .catch(() => {
         stream = null;
         cam.srcObject = null;
         applySelfie(false);
-        camErr.innerHTML = `<b>camera unavailable</b><br>${e?.name || "denied"}`;
-        camErr.style.display = "flex";
+        if (startTries < MAX_TRIES) {
+          startTries += 1;
+          showStartPrompt("starting camera…");
+          setTimeout(() => startCamera(camIndex), 500 * startTries);
+        } else {
+          showStartPrompt("tap to start camera");
+        }
       })
       .finally(() => {
         starting = false;
       });
+  }
+
+  function showStartPrompt(msg) {
+    camPrompt.innerHTML = `<b>${msg}</b>`;
+    camPrompt.classList.add("show");
+  }
+  function hideStartPrompt() {
+    camPrompt.classList.remove("show");
   }
 
   function stopCamera() {
@@ -416,7 +435,10 @@
   }
 
   function ptt() {
-    if (mode === "capture") return capture();
+    if (mode === "capture") {
+      if (!stream) return ensureCamera();
+      return capture();
+    }
     if (mode === "grid") {
       if (!photos.length) return;
       if (selected.size) toggleSelectIdx(sel);
@@ -504,13 +526,15 @@
   $("del-sel").addEventListener("click", deleteSelected);
 
   function ensureCamera() {
-    if (!stream && !starting && navigator.mediaDevices?.getUserMedia) startCamera(camIndex);
+    if (!stream && !starting && navigator.mediaDevices?.getUserMedia) {
+      startTries = 0;
+      startCamera(camIndex);
+    }
   }
   ["sideClick", "scrollUp", "scrollDown", "longPressEnd"].forEach((t) => {
-    window.addEventListener(t, ensureCamera, { once: true });
+    window.addEventListener(t, ensureCamera);
   });
-  document.addEventListener("pointerdown", ensureCamera, { once: true });
-  document.addEventListener("keydown", ensureCamera, { once: true });
+  camPrompt.addEventListener("click", ensureCamera);
 
   function boot() {
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -518,9 +542,12 @@
       camErr.style.display = "flex";
       return;
     }
-    startCamera(0);
     discover();
     loadPhotos();
+    setTimeout(() => startCamera(0), 100);
+    setTimeout(() => {
+      if (!stream) showStartPrompt("tap to start camera");
+    }, 1500);
   }
   document.addEventListener("DOMContentLoaded", boot);
   if (document.readyState !== "loading") boot();
