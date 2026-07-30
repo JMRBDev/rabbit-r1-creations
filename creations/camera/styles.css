@@ -152,7 +152,6 @@ body {
 }
 .iconbtn {
   position: absolute;
-  left: 12px;
   top: 50%;
   transform: translateY(-50%);
   width: 28px;
@@ -165,6 +164,13 @@ body {
   color: var(--text);
   border-radius: 6px;
   cursor: pointer;
+}
+#to-gallery {
+  left: 12px;
+  color: var(--accent);
+}
+#flash-toggle {
+  right: 12px;
 }
 .iconbtn.on {
   background: var(--accent);
@@ -288,17 +294,6 @@ body {
   width: 100%;
   height: 100%;
   object-fit: contain;
-  transition: transform 0.18s ease;
-  will-change: transform;
-}
-#screen-full .stage img.panning {
-  transition: none;
-}
-#screen-full .stage img.zoomed {
-  cursor: grab;
-}
-#screen-full .stage img.zoomed:active {
-  cursor: grabbing;
 }
 
 .banner {

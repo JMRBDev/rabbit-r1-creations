@@ -13,7 +13,6 @@
   var camErr = $("cam-err");
   var camPrompt = $("cam-prompt");
   var fullImg = $("full-img");
-  var fullStage = document.querySelector("#screen-full .stage");
 
   var cams = [];
   var camIndex = 0;
@@ -31,14 +30,7 @@
   var selected = new Set();
   var lastWheel = 0;
 
-  var zoom = false;
-  var panX = 0;
-  var panY = 0;
-  var pd = null;
-  var panned = false;
-
   var toast = (msg, ms) => R1.toast(banner, msg, ms);
-  var clamp = (v) => Math.max(-1, Math.min(1, v));
 
   function setMode(m) {
     mode = m;
@@ -399,49 +391,20 @@
     grid.children[sel]?.scrollIntoView({ block: "nearest" });
   }
 
-  function applyZoom() {
-    fullImg.style.transform = zoom ? "scale(2.2)" : "";
-    fullImg.style.transformOrigin = zoom ? `${50 + panX * 50}% ${50 + panY * 50}%` : "";
-    fullImg.classList.toggle("zoomed", zoom);
-    $("full-tag").textContent = zoom ? "2× zoom" : "photo";
-    $("full-hint").textContent = zoom ? "ptt: fit · wheel: pan" : "ptt: zoom · hold: grid";
-  }
-
-  function toggleZoom() {
-    zoom = !zoom;
-    if (!zoom) {
-      panX = 0;
-      panY = 0;
-    }
-    applyZoom();
-  }
-
   function showFull(i) {
     fullIdx = ((i % photos.length) + photos.length) % photos.length;
-    zoom = false;
-    panX = 0;
-    panY = 0;
     fullImg.src = photos[fullIdx].url;
     $("full-meta").textContent = `${fullIdx + 1}/${photos.length}`;
-    applyZoom();
     setMode("full");
   }
 
   function wheel(dir) {
     var now = Date.now();
-    var gap = mode === "capture" ? 180 : mode === "full" && zoom ? 70 : 110;
-    if (now - lastWheel < gap) return;
+    if (now - lastWheel < (mode === "capture" ? 180 : 110)) return;
     lastWheel = now;
     if (mode === "capture") switchCamera(dir);
     else if (mode === "grid") moveCursor(dir);
-    else if (mode === "full") {
-      if (zoom) {
-        panY = clamp(panY - dir * 0.16);
-        applyZoom();
-      } else {
-        showFull(fullIdx + dir);
-      }
-    }
+    else if (mode === "full") showFull(fullIdx + dir);
   }
 
   function ptt() {
@@ -455,7 +418,7 @@
       else showFull(sel);
       return;
     }
-    if (mode === "full") return toggleZoom();
+    if (mode === "full") return openGallery();
   }
 
   function longPress() {
@@ -474,43 +437,12 @@
     }
   }
 
-  fullImg.addEventListener("pointerdown", (e) => {
-    if (!zoom) return;
-    panned = false;
-    pd = { x: e.clientX, y: e.clientY, px: panX, py: panY };
-    fullImg.setPointerCapture(e.pointerId);
-    fullImg.classList.add("panning");
-  });
-  fullImg.addEventListener("pointermove", (e) => {
-    if (!pd) return;
-    var dx = e.clientX - pd.x;
-    var dy = e.clientY - pd.y;
-    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) panned = true;
-    var ox = fullStage.clientWidth || 1;
-    var oy = fullStage.clientHeight || 1;
-    panX = clamp(pd.px + dx / ox);
-    panY = clamp(pd.py + dy / oy);
-    fullImg.style.transformOrigin = `${50 + panX * 50}% ${50 + panY * 50}%`;
-  });
-  var endPan = () => {
-    pd = null;
-    fullImg.classList.remove("panning");
-  };
-  fullImg.addEventListener("pointerup", endPan);
-  fullImg.addEventListener("pointercancel", endPan);
-  fullImg.addEventListener("click", () => {
-    if (panned) {
-      panned = false;
-      return;
-    }
-    toggleZoom();
-  });
-
   R1.bindControls({ wheel, ptt, longPress, devbar: "devbar" });
-  if (!R1.hasSDK) shutter.addEventListener("click", ptt);
+  shutter.addEventListener("click", ptt);
 
   $("to-gallery").addEventListener("click", openGallery);
   $("to-camera").addEventListener("click", exitToCapture);
+  $("full-back").addEventListener("click", openGallery);
   flashToggle.addEventListener("click", () => {
     flashOn = !flashOn;
     flashToggle.classList.toggle("on", flashOn);

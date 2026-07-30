@@ -11,16 +11,6 @@
 <body>
 
   <section id="screen-capture" class="screen active">
-    <div class="topbar">
-      <button class="topbtn" id="to-gallery" aria-label="gallery">
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <rect x="3" y="3" width="7" height="7" rx="1.5"/>
-          <rect x="14" y="3" width="7" height="7" rx="1.5"/>
-          <rect x="3" y="14" width="7" height="7" rx="1.5"/>
-          <rect x="14" y="14" width="7" height="7" rx="1.5"/>
-        </svg>
-      </button>
-    </div>
     <div id="viewfinder">
       <video id="cam" autoplay playsinline muted></video>
       <div class="guides"></div>
@@ -31,12 +21,20 @@
       <div class="screen-flash" id="screen-flash"></div>
     </div>
     <div class="shutter">
+      <button class="iconbtn" id="to-gallery" aria-label="gallery">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <rect x="3" y="3" width="7" height="7" rx="1.5"/>
+          <rect x="14" y="3" width="7" height="7" rx="1.5"/>
+          <rect x="3" y="14" width="7" height="7" rx="1.5"/>
+          <rect x="14" y="14" width="7" height="7" rx="1.5"/>
+        </svg>
+      </button>
+      <div class="shutter-btn" id="shutter"></div>
       <button class="iconbtn" id="flash-toggle" aria-label="flash" style="display:none">
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true">
           <path d="M13 2 4 14h7l-1 8 9-12h-7z"/>
         </svg>
       </button>
-      <div class="shutter-btn" id="shutter"></div>
     </div>
   </section>
 
@@ -62,7 +60,11 @@
     <div class="topbar">
       <span class="tag" id="full-tag">photo</span>
       <span class="meta" id="full-meta">1/1</span>
-      <span class="hint" id="full-hint">ptt: zoom · hold: grid</span>
+      <button class="topbtn" id="full-back" aria-label="back to grid">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M15 18l-6-6 6-6"/>
+        </svg>
+      </button>
     </div>
     <div class="stage"><img id="full-img" alt=""></div>
   </section>
