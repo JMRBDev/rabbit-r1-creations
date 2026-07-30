@@ -57,6 +57,11 @@
     startCamera(camIndex);
   }
 
+  function openGallery() {
+    setMode("grid");
+    loadPhotos().then(renderGrid);
+  }
+
   function discover() {
     return navigator.mediaDevices
       .enumerateDevices()
@@ -241,8 +246,13 @@
           ),
         );
       })
-      .then((arr) => (photos = arr.filter(Boolean)))
-      .catch(() => (photos = []));
+      .then((arr) => {
+        var loaded = arr.filter(Boolean);
+        var loadedIds = new Set(loaded.map((p) => p.id));
+        var inflight = photos.filter((p) => !loadedIds.has(p.id));
+        photos = inflight.concat(loaded);
+      })
+      .catch(() => {});
   }
 
   function persistIndex() {
@@ -450,8 +460,7 @@
 
   function longPress() {
     if (mode === "capture") {
-      renderGrid();
-      setMode("grid");
+      openGallery();
       return;
     }
     if (mode === "grid") {
@@ -461,8 +470,7 @@
       return;
     }
     if (mode === "full") {
-      renderGrid();
-      setMode("grid");
+      openGallery();
     }
   }
 
@@ -501,10 +509,7 @@
   R1.bindControls({ wheel, ptt, longPress, devbar: "devbar" });
   if (!R1.hasSDK) shutter.addEventListener("click", ptt);
 
-  $("to-gallery").addEventListener("click", () => {
-    renderGrid();
-    setMode("grid");
-  });
+  $("to-gallery").addEventListener("click", openGallery);
   $("to-camera").addEventListener("click", exitToCapture);
   flashToggle.addEventListener("click", () => {
     flashOn = !flashOn;
