@@ -42,6 +42,7 @@
   <section id="screen-grid" class="screen">
     <div class="topbar">
       <span class="count" id="gal-meta">0</span>
+      <span class="hint" id="gal-hint"></span>
       <button class="topbtn" id="to-camera" aria-label="back to camera">
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true">
           <path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L19 6a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
@@ -51,20 +52,19 @@
     </div>
     <div class="grid" id="grid"></div>
     <div class="gal-bar">
-      <button class="gal-btn" id="sel-all">all</button>
-      <button class="gal-btn" id="clear-sel">unselect</button>
+      <button class="gal-btn" id="sel-all">select all</button>
+      <button class="gal-btn" id="clear-sel">cancel</button>
       <button class="gal-btn danger" id="del-sel">delete</button>
     </div>
   </section>
 
   <section id="screen-full" class="screen">
     <div class="topbar">
-      <span class="tag">photo</span>
+      <span class="tag" id="full-tag">photo</span>
       <span class="meta" id="full-meta">1/1</span>
-      <span class="hint">hold: delete</span>
+      <span class="hint" id="full-hint">ptt: zoom · hold: grid</span>
     </div>
     <div class="stage"><img id="full-img" alt=""></div>
-    <div class="fullbar">PTT &nbsp;back to grid</div>
   </section>
 
   <div class="banner" id="banner"></div>

@@ -11,6 +11,8 @@
   var flashToggle = $("flash-toggle");
   var switchPulse = $("switch-pulse");
   var camErr = $("cam-err");
+  var fullImg = $("full-img");
+  var fullStage = document.querySelector("#screen-full .stage");
 
   var cams = [];
   var camIndex = 0;
@@ -25,7 +27,14 @@
   var selected = new Set();
   var lastWheel = 0;
 
+  var zoom = false;
+  var panX = 0;
+  var panY = 0;
+  var pd = null;
+  var panned = false;
+
   var toast = (msg, ms) => R1.toast(banner, msg, ms);
+  var clamp = (v) => Math.max(-1, Math.min(1, v));
 
   function setMode(m) {
     mode = m;
@@ -205,6 +214,45 @@
     attempt(3).catch((e) => toast(`save failed: ${e?.name || "error"}`, 2000));
   }
 
+  function updateSelBar() {
+    var has = selected.size > 0;
+    $("screen-grid").classList.toggle("has-sel", has);
+    $("gal-meta").textContent = has ? `${selected.size}/${photos.length}` : `${photos.length}`;
+    $("gal-hint").textContent = has
+      ? "hold: delete"
+      : photos.length
+        ? "press: open · hold: select"
+        : "";
+  }
+
+  function setCursor(idx) {
+    if (idx === sel) return;
+    grid.children[sel]?.classList.remove("cur");
+    sel = idx;
+    grid.children[sel]?.classList.add("cur");
+  }
+
+  function moveCursor(dir) {
+    if (!photos.length) return;
+    var next = (sel + dir + photos.length) % photos.length;
+    setCursor(next);
+    grid.children[sel]?.scrollIntoView({ block: "nearest" });
+  }
+
+  function toggleSelectIdx(idx) {
+    var p = photos[idx];
+    if (!p) return;
+    var card = grid.children[idx];
+    if (selected.has(p.id)) {
+      selected.delete(p.id);
+      card?.classList.remove("sel");
+    } else {
+      selected.add(p.id);
+      card?.classList.add("sel");
+    }
+    updateSelBar();
+  }
+
   function deleteSelected() {
     if (!selected.size) return toast("select photos first");
     var n = selected.size;
@@ -219,19 +267,12 @@
     renderGrid();
   }
 
-  function updateSelBar() {
-    $("screen-grid").classList.toggle("has-sel", selected.size > 0);
-    $("gal-meta").textContent = selected.size
-      ? `${selected.size}/${photos.length}`
-      : `${photos.length}`;
-  }
-
   function bindCard(el, idx) {
     var t = null;
     var fired = false;
     var sx = 0;
     var sy = 0;
-    var up = () => {
+    var cancel = () => {
       if (t) {
         clearTimeout(t);
         t = null;
@@ -246,44 +287,45 @@
         t = null;
         fired = true;
         onCardLong(idx);
-      }, 480);
+      }, 380);
     };
     el.onpointermove = (e) => {
-      if (t && (Math.abs(e.clientX - sx) > 10 || Math.abs(e.clientY - sy) > 10)) up();
+      if (t && (Math.abs(e.clientX - sx) > 10 || Math.abs(e.clientY - sy) > 10)) cancel();
     };
-    el.onpointerup = up;
-    el.onpointercancel = up;
-    el.onpointerleave = up;
+    el.onpointerup = cancel;
+    el.onpointercancel = cancel;
+    el.onpointerleave = cancel;
     el.onclick = () => {
       if (fired) {
         fired = false;
         return;
       }
-      sel = idx;
-      showFull(idx);
+      onCardTap(idx);
     };
   }
 
+  function onCardTap(idx) {
+    setCursor(idx);
+    if (selected.size) toggleSelectIdx(idx);
+    else showFull(idx);
+  }
+
   function onCardLong(idx) {
-    sel = idx;
-    if (selected.size) return showFull(idx);
-    selected.add(photos[idx].id);
-    grid.children[idx]?.classList.add("sel");
-    updateSelBar();
-    toast("selected (1)");
+    setCursor(idx);
+    toggleSelectIdx(idx);
   }
 
   function renderGrid() {
     updateSelBar();
     if (!photos.length) {
-      grid.innerHTML = '<div class="empty">no photos yet<br>tap the camera icon</div>';
+      grid.innerHTML = '<div class="empty">no photos yet</div>';
       return;
     }
     sel = Math.min(Math.max(0, sel), photos.length - 1);
     grid.innerHTML = "";
     photos.forEach((p, i) => {
       var d = grid.appendChild(document.createElement("div"));
-      d.className = `card${selected.has(p.id) ? " sel" : ""}`;
+      d.className = `card${selected.has(p.id) ? " sel" : ""}${i === sel ? " cur" : ""}`;
       var img = d.appendChild(document.createElement("img"));
       img.src = p.url;
       bindCard(d, i);
@@ -291,51 +333,111 @@
     grid.children[sel]?.scrollIntoView({ block: "nearest" });
   }
 
+  function applyZoom() {
+    fullImg.style.transform = zoom ? "scale(2.2)" : "";
+    fullImg.style.transformOrigin = zoom ? `${50 + panX * 50}% ${50 + panY * 50}%` : "";
+    fullImg.classList.toggle("zoomed", zoom);
+    $("full-tag").textContent = zoom ? "2× zoom" : "photo";
+    $("full-hint").textContent = zoom ? "ptt: fit · wheel: pan" : "ptt: zoom · hold: grid";
+  }
+
+  function toggleZoom() {
+    zoom = !zoom;
+    if (!zoom) {
+      panX = 0;
+      panY = 0;
+    }
+    applyZoom();
+  }
+
   function showFull(i) {
-    fullIdx = (i + photos.length) % photos.length;
-    $("full-img").src = photos[fullIdx].url;
+    fullIdx = ((i % photos.length) + photos.length) % photos.length;
+    zoom = false;
+    panX = 0;
+    panY = 0;
+    fullImg.src = photos[fullIdx].url;
     $("full-meta").textContent = `${fullIdx + 1}/${photos.length}`;
+    applyZoom();
     setMode("full");
   }
 
   function wheel(dir) {
     var now = Date.now();
-    if (now - lastWheel < (mode === "capture" ? 180 : 110)) return;
+    var gap = mode === "capture" ? 180 : mode === "full" && zoom ? 70 : 110;
+    if (now - lastWheel < gap) return;
     lastWheel = now;
     if (mode === "capture") switchCamera(dir);
-    else if (mode === "grid") {
-      sel = (sel + dir + photos.length) % photos.length;
-      renderGrid();
-    } else showFull(fullIdx + dir);
+    else if (mode === "grid") moveCursor(dir);
+    else if (mode === "full") {
+      if (zoom) {
+        panY = clamp(panY - dir * 0.16);
+        applyZoom();
+      } else {
+        showFull(fullIdx + dir);
+      }
+    }
   }
 
   function ptt() {
-    if (mode === "capture") capture();
-    else if (mode === "grid") photos.length && showFull(sel);
-    else {
-      renderGrid();
-      setMode("grid");
+    if (mode === "capture") return capture();
+    if (mode === "grid") {
+      if (!photos.length) return;
+      if (selected.size) toggleSelectIdx(sel);
+      else showFull(sel);
+      return;
     }
+    if (mode === "full") return toggleZoom();
   }
 
   function longPress() {
     if (mode === "capture") {
       renderGrid();
       setMode("grid");
-    } else if (mode === "grid") exitToCapture();
-    else {
-      var p = photos[fullIdx];
-      photos.splice(fullIdx, 1);
-      persistIndex();
-      store.removeItem(`cam_photo_${p.id}`);
-      toast("deleted");
-      if (photos.length) showFull(Math.min(fullIdx, photos.length - 1));
-      else {
-        renderGrid();
-        setMode("grid");
-      }
+      return;
+    }
+    if (mode === "grid") {
+      if (!photos.length) return exitToCapture();
+      if (selected.size) return deleteSelected();
+      toggleSelectIdx(sel);
+      return;
+    }
+    if (mode === "full") {
+      renderGrid();
+      setMode("grid");
     }
   }
+
+  fullImg.addEventListener("pointerdown", (e) => {
+    if (!zoom) return;
+    panned = false;
+    pd = { x: e.clientX, y: e.clientY, px: panX, py: panY };
+    fullImg.setPointerCapture(e.pointerId);
+    fullImg.classList.add("panning");
+  });
+  fullImg.addEventListener("pointermove", (e) => {
+    if (!pd) return;
+    var dx = e.clientX - pd.x;
+    var dy = e.clientY - pd.y;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) panned = true;
+    var ox = fullStage.clientWidth || 1;
+    var oy = fullStage.clientHeight || 1;
+    panX = clamp(pd.px + dx / ox);
+    panY = clamp(pd.py + dy / oy);
+    fullImg.style.transformOrigin = `${50 + panX * 50}% ${50 + panY * 50}%`;
+  });
+  var endPan = () => {
+    pd = null;
+    fullImg.classList.remove("panning");
+  };
+  fullImg.addEventListener("pointerup", endPan);
+  fullImg.addEventListener("pointercancel", endPan);
+  fullImg.addEventListener("click", () => {
+    if (panned) {
+      panned = false;
+      return;
+    }
+    toggleZoom();
+  });
 
   R1.bindControls({ wheel, ptt, longPress, devbar: "devbar" });
   if (!R1.hasSDK) shutter.addEventListener("click", ptt);
@@ -350,6 +452,7 @@
     flashToggle.classList.toggle("on", flashOn);
   });
   $("sel-all").addEventListener("click", () => {
+    if (!photos.length) return;
     photos.forEach((p) => {
       selected.add(p.id);
     });
@@ -359,7 +462,7 @@
     if (!selected.size) return;
     selected.clear();
     renderGrid();
-    toast("cleared");
+    toast("cancelled");
   });
   $("del-sel").addEventListener("click", deleteSelected);
 
