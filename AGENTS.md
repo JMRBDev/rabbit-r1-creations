@@ -26,7 +26,7 @@ creations/<name>/              one Creation per folder, split into three files:
 ├── styles.css                   all CSS
 └── app.js                       all JS
 lib/fonts/                      shared Power Grotesk WOFF2 + fonts.css (3 weights)
-lib/shared/reset.css            shared reset + base layer + design tokens (loaded by every Creation)
+lib/shared/                     shared reset.css (CSS base + tokens) + core.js / store.js (window.R1 helpers)
 qr-generator/                   self-host QR generator tool — NOT a Creation, leave at root
 README.md                       human-facing overview
 AGENTS.md                       this file (source of truth)
@@ -52,7 +52,7 @@ creations/<name>/
 - `index.html` references its siblings with relative paths: `<link rel="stylesheet" href="styles.css">` and `<script src="app.js"></script>`.
 - Reference shared `lib/` assets with the deeper relative path (`../../lib/...`) — the Creation is two levels deep: `../../lib/fonts/fonts.css` and `../../lib/shared/reset.css`.
 - Stylesheet load order matters: **fonts.css → reset.css → the Creation's styles.css** (so the Creation always wins and can override freely).
-- Keep `<script src="app.js">` at the end of `<body>` so the DOM is parsed before it runs.
+- Scripts go at the end of `<body>`, in dependency order: `core.js` (+ `store.js` if you persist data) → your `app.js`. `core.js` exposes `window.R1` (`hasSDK`, `$`, `toast`, `bindControls`) — use `bindControls()` instead of hand-wiring the hardware events + dev harness.
 
 ## Creating a new Creation
 
@@ -83,6 +83,8 @@ creations/<name>/
   <!-- on-screen controls for desktop testing; auto-hidden on device -->
   <div class="devbar" id="devbar"></div>
 
+  <script src="../../lib/shared/core.js"></script>
+  <script src="../../lib/shared/store.js"></script> <!-- only if you persist data -->
   <script src="app.js"></script>
 </body>
 </html>
@@ -104,26 +106,21 @@ creations/<name>/
 ```js
 (function () {
   "use strict";
-  var hasSDK = typeof PluginMessageHandler !== "undefined";
 
   // hardware → handler wiring (also called by the dev controls)
   function onWheel(dir) {}      // dir = +1 (up) or -1 (down)
   function onPTT() {}           // side button click = primary action
   function onLongPress() {}     // long press = mode switch / destructive
 
-  window.addEventListener("scrollUp", function () { onWheel(1); });
-  window.addEventListener("scrollDown", function () { onWheel(-1); });
-  window.addEventListener("sideClick", onPTT);
-  window.addEventListener("longPressEnd", onLongPress);
+  // lib/shared/core.js exposes window.R1 — bindControls() wires the 4 hardware
+  // events AND, when there's no SDK, the desktop dev harness (devbar + arrow/space/g keys).
+  R1.bindControls({ wheel: onWheel, ptt: onPTT, longPress: onLongPress, devbar: "devbar" });
+
+  // other R1 helpers: R1.hasSDK, R1.$(id), R1.toast(el, msg, ms). load store.js for R1.store.
 
   window.onPluginMessage = function (data) {
     // data.data is a JSON string when useLLM was true
   };
-
-  if (!hasSDK) {
-    document.body.classList.add("dev");
-    // expose on-screen buttons + keyboard (arrows/space) that call onWheel/onPTT/onLongPress
-  }
 })();
 ```
 
@@ -259,8 +256,10 @@ For storage testing without the device, fall back to `localStorage` when `window
 
 ## Verification checklist (run before "done")
 
+- [ ] `npm run check` passes clean (Biome lint + format). Stage and it auto-fixes via lint-staged; never commit with outstanding errors.
 - [ ] The Creation is three files: `index.html`, `styles.css`, `app.js` — no inline `<style>`/`<script>`.
 - [ ] Loads `../../lib/fonts/fonts.css` and `../../lib/shared/reset.css` (in that order) before its own `styles.css`.
+- [ ] Loads `../../lib/shared/core.js` before `app.js` and wires input via `R1.bindControls()` (not hand-rolled `addEventListener`).
 - [ ] Body is exactly **240×282**, `user-scalable=no`, no scrollbars.
 - [ ] Loads `../../lib/fonts/fonts.css`; computed `font-family` starts with `"Power Grotesk"`.
 - [ ] **Dark mode only**; all colors come from the R1 palette (`#FE5000` accent on `#0a0a0a`/`#000`).

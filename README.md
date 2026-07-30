@@ -12,7 +12,7 @@ creations/<name>/   each Creation is a folder with three files:
 ├── styles.css         all CSS
 └── app.js             all JS
 lib/fonts/          shared Power Grotesk (WOFF2) — the R1's native typeface, used by every Creation
-lib/shared/         shared reset.css — box-model reset, 240×282 dark viewport, palette tokens
+lib/shared/         shared reset.css + core.js / store.js (R1 namespace: input wiring, toast, storage)
 qr-generator/       self-host tool that builds the install QR codes (not a Creation itself)
 ```
 
@@ -58,6 +58,14 @@ Every Creation renders in **Power Grotesk** on a shared dark base. Load the font
 ```
 
 `reset.css` provides the box-model reset, the 240×282 dark viewport, the font stack, and the R1 palette tokens (`--accent`, `--bg`, `--text`, …) — so each Creation's `styles.css` only holds its own component styles.
+
+`core.js` exposes a small `window.R1` namespace shared by every Creation — SDK detection, a `$` shorthand, a transient `toast()`, and `bindControls()` which wires the hardware events (and the desktop dev harness when there's no SDK). `store.js` attaches `R1.store`, the `creationStorage` bridge with a `localStorage` fallback. Load them as plain `<script src>` before `app.js`:
+
+```html
+<script src="../../lib/shared/core.js"></script>
+<script src="../../lib/shared/store.js"></script> <!-- only if you persist data -->
+<script src="app.js"></script>
+```
 
 Only WOFF2 is shipped (smallest payload for limited hardware; supported by the R1's Chromium WebView), and only the weights actually used: **400 Regular, 700 Bold, 800 Heavy**. The browser fetches weights on demand.
 
