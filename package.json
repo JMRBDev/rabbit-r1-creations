@@ -1,0 +1,20 @@
+{
+  "name": "rabbit-r1-creations",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Rabbit R1 Creations",
+  "scripts": {
+    "check": "biome check",
+    "format": "biome format --write",
+    "lint": "biome lint",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{js,mjs,cjs,ts,css,json,jsonc}": "biome check --write --no-errors-on-unmatched"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.6",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.2.0"
+  }
+}

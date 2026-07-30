@@ -7,10 +7,10 @@
 
 /* ---------- design tokens (R1 dark palette; override per-creation if needed) ---------- */
 :root {
-  --accent: #FE5000;      /* R1 orange — primary action, selection, brand */
-  --bg: #0a0a0a;          /* app background */
-  --bg-media: #000;       /* camera / image surfaces */
-  --surface: #141414;     /* cards, bars, thumbs */
+  --accent: #fe5000; /* R1 orange — primary action, selection, brand */
+  --bg: #0a0a0a; /* app background */
+  --bg-media: #000; /* camera / image surfaces */
+  --surface: #141414; /* cards, bars, thumbs */
   --text: #ffffff;
   --text-muted: #b8b8b8;
   --text-dim: #6a6a6a;
@@ -18,7 +18,9 @@
 }
 
 /* ---------- box model reset ---------- */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
@@ -26,7 +28,8 @@
 }
 
 /* ---------- viewport baseline (every creation is exactly 240×282) ---------- */
-html, body {
+html,
+body {
   width: 240px;
   height: 282px;
   overflow: hidden;
@@ -40,10 +43,31 @@ html, body {
 }
 
 /* ---------- media & form elements ---------- */
-img, svg, video, canvas { display: block; max-width: 100%; }
-button, input, select, textarea { font: inherit; color: inherit; background: none; border: 0; }
-ul, ol { list-style: none; }
+img,
+svg,
+video,
+canvas {
+  display: block;
+  max-width: 100%;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+}
+ul,
+ol {
+  list-style: none;
+}
 
 /* ---------- desktop dev controls (hidden on device; shown when body.dev) ---------- */
-.devbar { display: none; }
-body.dev .devbar { display: flex; }
+.devbar {
+  display: none;
+}
+body.dev .devbar {
+  display: flex;
+}
