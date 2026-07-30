@@ -17,6 +17,7 @@
   var cams = [];
   var camIndex = 0;
   var stream = null;
+  var starting = false;
   var mode = "capture";
   var isSelfie = false;
   var flashOn = false;
@@ -83,8 +84,12 @@
   }
 
   function startCamera(i) {
-    camIndex = (i + cams.length) % cams.length;
-    var c = cams[camIndex];
+    if (starting) return Promise.resolve();
+    starting = true;
+    var c = cams.length
+      ? cams[(i + cams.length) % cams.length]
+      : { deviceId: "", face: "", label: "default" };
+    camIndex = cams.length ? (i + cams.length) % cams.length : 0;
     camErr.style.display = "none";
     stopCamera();
     return navigator.mediaDevices
@@ -97,6 +102,7 @@
       .then((s) => {
         stream = s;
         cam.srcObject = s;
+        cam.play().catch(() => {});
         var fm = s.getVideoTracks()[0]?.getSettings?.().facingMode || "";
         if (fm === "user" || fm === "environment") c.face = fm === "user" ? "user" : "env";
         applySelfie(c.face === "user");
@@ -107,6 +113,9 @@
         applySelfie(false);
         camErr.innerHTML = `<b>camera unavailable</b><br>${e?.name || "denied"}`;
         camErr.style.display = "flex";
+      })
+      .finally(() => {
+        starting = false;
       });
   }
 
@@ -129,8 +138,12 @@
     startCamera(ni).then(() => toast(label));
   }
 
+  var capturing = false;
+
   function capture() {
-    if (!stream || !cam.videoWidth) return toast("no camera");
+    if (!stream) return toast("no camera");
+    if (capturing) return;
+    capturing = true;
     if (isSelfie && flashOn) {
       screenFlash.classList.add("on");
       setTimeout(() => {
@@ -140,31 +153,60 @@
     } else runCapture(false);
   }
 
-  function runCapture(skipFlashAnim) {
-    var dataUrl;
-    try {
-      var vw = cam.videoWidth;
-      var scale = Math.min(1, 640 / Math.max(vw, cam.videoHeight));
-      var cnv = document.createElement("canvas");
-      cnv.width = Math.round(vw * scale);
-      cnv.height = Math.round(cam.videoHeight * scale);
-      var ctx = cnv.getContext("2d");
-      if (cam.classList.contains("flip")) {
-        ctx.translate(cnv.width, 0);
-        ctx.scale(-1, 1);
+  function whenFrame(cb) {
+    if (cam.videoWidth) return cb();
+    var done = false;
+    var finish = () => {
+      if (done) return;
+      done = true;
+      cb();
+    };
+    if (cam.requestVideoFrameCallback) cam.requestVideoFrameCallback(finish);
+    var n = 0;
+    var t = setInterval(() => {
+      if (cam.videoWidth || ++n > 16) {
+        clearInterval(t);
+        finish();
       }
-      ctx.drawImage(cam, 0, 0, cnv.width, cnv.height);
-      dataUrl = cnv.toDataURL("image/jpeg", 0.7);
-    } catch (e) {
-      return toast(`capture failed: ${e?.name || "error"}`, 2000);
+    }, 50);
+  }
+
+  function drawFrame() {
+    var vw = cam.videoWidth;
+    var vh = cam.videoHeight;
+    if (!vw || !vh) return null;
+    var scale = Math.min(1, 640 / Math.max(vw, vh));
+    var cnv = document.createElement("canvas");
+    cnv.width = Math.round(vw * scale);
+    cnv.height = Math.round(vh * scale);
+    var ctx = cnv.getContext("2d");
+    if (cam.classList.contains("flip")) {
+      ctx.translate(cnv.width, 0);
+      ctx.scale(-1, 1);
     }
-    if (!skipFlashAnim) {
-      flash.classList.add("fire");
-      requestAnimationFrame(() => flash.classList.remove("fire"));
-    }
-    shutter.classList.add("fire");
-    setTimeout(() => shutter.classList.remove("fire"), 90);
-    savePhoto(dataUrl);
+    ctx.drawImage(cam, 0, 0, cnv.width, cnv.height);
+    return cnv.toDataURL("image/jpeg", 0.7);
+  }
+
+  function runCapture(skipFlashAnim) {
+    whenFrame(() => {
+      var dataUrl;
+      try {
+        dataUrl = drawFrame();
+      } catch (e) {
+        capturing = false;
+        return toast(`capture failed: ${e?.name || "error"}`, 2000);
+      }
+      capturing = false;
+      if (!dataUrl) return toast("no camera", 1200);
+      if (!skipFlashAnim) {
+        flash.classList.add("fire");
+        requestAnimationFrame(() => flash.classList.remove("fire"));
+      }
+      shutter.classList.add("fire");
+      setTimeout(() => shutter.classList.remove("fire"), 90);
+      savePhoto(dataUrl);
+    });
   }
 
   function loadPhotos() {
@@ -218,11 +260,6 @@
     var has = selected.size > 0;
     $("screen-grid").classList.toggle("has-sel", has);
     $("gal-meta").textContent = has ? `${selected.size}/${photos.length}` : `${photos.length}`;
-    $("gal-hint").textContent = has
-      ? "hold: delete"
-      : photos.length
-        ? "press: open · hold: select"
-        : "";
   }
 
   function setCursor(idx) {
@@ -466,15 +503,24 @@
   });
   $("del-sel").addEventListener("click", deleteSelected);
 
+  function ensureCamera() {
+    if (!stream && !starting && navigator.mediaDevices?.getUserMedia) startCamera(camIndex);
+  }
+  ["sideClick", "scrollUp", "scrollDown", "longPressEnd"].forEach((t) => {
+    window.addEventListener(t, ensureCamera, { once: true });
+  });
+  document.addEventListener("pointerdown", ensureCamera, { once: true });
+  document.addEventListener("keydown", ensureCamera, { once: true });
+
   function boot() {
-    loadPhotos().then(() => {
-      if (!navigator.mediaDevices?.getUserMedia) {
-        camErr.innerHTML = "<b>no camera api</b><br>this webview has no<br>getUserMedia";
-        camErr.style.display = "flex";
-        return;
-      }
-      discover().then(() => startCamera(0));
-    });
+    if (!navigator.mediaDevices?.getUserMedia) {
+      camErr.innerHTML = "<b>no camera api</b><br>this webview has no<br>getUserMedia";
+      camErr.style.display = "flex";
+      return;
+    }
+    startCamera(0);
+    discover();
+    loadPhotos();
   }
   document.addEventListener("DOMContentLoaded", boot);
   if (document.readyState !== "loading") boot();
