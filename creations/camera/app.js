@@ -1,265 +1,376 @@
-(function () {
-  "use strict";
-
-  var hasSDK = typeof PluginMessageHandler !== "undefined";
-  var storage = (function () {
-    if (window.creationStorage && window.creationStorage.plain) return window.creationStorage.plain;
-    var ls = { _: {} };
-    ls.getItem = function (k) { return Object.prototype.hasOwnProperty.call(ls._, k) ? ls._[k] : null; };
-    ls.setItem = function (k, v) { ls._[k] = v; };
-    ls.removeItem = function (k) { delete ls._[k]; };
-    return ls;
-  })();
-
+(() => {
   var INDEX_KEY = "cam_photos_index";
-  var MAX_PHOTOS = 12;
-
-  var cam = document.getElementById("cam");
-  var grid = document.getElementById("grid");
-  var banner = document.getElementById("banner");
-  var flash = document.getElementById("flash");
-  var switchPulse = document.getElementById("switch-pulse");
-  var camErr = document.getElementById("cam-err");
+  var $ = R1.$;
+  var store = R1.store;
+  var cam = $("cam");
+  var grid = $("grid");
+  var banner = $("banner");
+  var flash = $("flash");
+  var shutter = $("shutter");
+  var screenFlash = $("screen-flash");
+  var flashToggle = $("flash-toggle");
+  var switchPulse = $("switch-pulse");
+  var camErr = $("cam-err");
 
   var cams = [];
   var camIndex = 0;
   var stream = null;
   var mode = "capture";
+  var isSelfie = false;
+  var flashOn = false;
 
   var photos = [];
   var sel = 0;
   var fullIdx = 0;
-
+  var selected = new Set();
   var lastWheel = 0;
 
-  /* ---------- helpers ---------- */
-  function b64(s) { try { return btoa(s); } catch (e) { return btoa(unescape(encodeURIComponent(s))); } }
-  function unb64(s) { try { return atob(s); } catch (e) { return decodeURIComponent(escape(atob(s))); } }
-
-  function toast(msg, ms) {
-    banner.textContent = msg;
-    banner.classList.add("show");
-    clearTimeout(toast._t);
-    toast._t = setTimeout(function () { banner.classList.remove("show"); }, ms || 1200);
-  }
+  var toast = (msg, ms) => R1.toast(banner, msg, ms);
 
   function setMode(m) {
     mode = m;
-    document.querySelectorAll(".screen").forEach(function (s) { s.classList.remove("active"); });
-    var id = m === "capture" ? "screen-capture" : m === "grid" ? "screen-grid" : "screen-full";
-    document.getElementById(id).classList.add("active");
-    document.getElementById("full-meta").textContent = (photos.length ? (fullIdx + 1) : 0) + "/" + photos.length;
+    document.querySelectorAll(".screen").forEach((s) => {
+      s.classList.remove("active");
+    });
+    $(
+      m === "capture" ? "screen-capture" : m === "grid" ? "screen-grid" : "screen-full",
+    ).classList.add("active");
     if (m !== "capture") stopCamera();
   }
 
-  /* ---------- camera device discovery ---------- */
-  function discover() {
-    return navigator.mediaDevices.enumerateDevices().then(function (devs) {
-      var vids = devs.filter(function (d) { return d.kind === "videoinput"; });
-      if (vids.length === 0) vids = [{ deviceId: "", label: "default" }];
-      cams = vids.map(function (d, i) {
-        var lab = (d.label || "").toLowerCase();
-        var face = lab.indexOf("back") >= 0 || lab.indexOf("rear") >= 0 || lab.indexOf("environ") >= 0 ? "env"
-                 : lab.indexOf("front") >= 0 || lab.indexOf("user") >= 0 ? "user" : "";
-        return { deviceId: d.deviceId, label: d.label || ("cam " + (i + 1)), face: face };
-      });
-    }).catch(function () { cams = [{ deviceId: "", label: "default", face: "" }]; });
+  function exitToCapture() {
+    selected.clear();
+    setMode("capture");
+    startCamera(camIndex);
   }
 
-  function isFront(c) { return c.face === "user" || /front|user/.test(c.label.toLowerCase()); }
+  function discover() {
+    return navigator.mediaDevices
+      .enumerateDevices()
+      .then((devs) => {
+        var vids = devs.filter((d) => d.kind === "videoinput");
+        if (!vids.length) vids = [{ deviceId: "", label: "default" }];
+        cams = vids.map((d, i) => {
+          var lab = (d.label || "").toLowerCase();
+          var face = /back|rear|environ/.test(lab)
+            ? "env"
+            : /front|user|inner|selfie/.test(lab)
+              ? "user"
+              : "";
+          return { deviceId: d.deviceId, label: d.label || `cam ${i + 1}`, face };
+        });
+      })
+      .catch(() => (cams = [{ deviceId: "", label: "default", face: "" }]));
+  }
+
+  function applySelfie(front) {
+    isSelfie = front;
+    cam.classList.toggle("flip", front);
+    flashToggle.style.display = front ? "" : "none";
+    if (!front) {
+      flashOn = false;
+      flashToggle.classList.remove("on");
+    }
+  }
 
   function startCamera(i) {
     camIndex = (i + cams.length) % cams.length;
     var c = cams[camIndex];
-    document.getElementById("cam-meta").textContent = (cams.length > 1 ? (camIndex + 1) + "/" + cams.length + " " : "") + c.label;
     camErr.style.display = "none";
-
-    var constraints = { video: c.deviceId ? { deviceId: { exact: c.deviceId } } : { facingMode: { ideal: "environment" } }, audio: false };
     stopCamera();
-    return navigator.mediaDevices.getUserMedia(constraints).then(function (s) {
-      stream = s;
-      cam.srcObject = s;
-      cam.classList.toggle("flip", isFront(c));
-    }).catch(function (e) {
-      cam.srcObject = null;
-      camErr.innerHTML = "<b>camera unavailable</b><br>" + (e && e.name ? e.name : "denied");
-      camErr.style.display = "flex";
-    });
+    return navigator.mediaDevices
+      .getUserMedia({
+        video: c.deviceId
+          ? { deviceId: { exact: c.deviceId } }
+          : { facingMode: { ideal: "environment" } },
+        audio: false,
+      })
+      .then((s) => {
+        stream = s;
+        cam.srcObject = s;
+        var fm = s.getVideoTracks()[0]?.getSettings?.().facingMode || "";
+        if (fm === "user" || fm === "environment") c.face = fm === "user" ? "user" : "env";
+        applySelfie(c.face === "user");
+      })
+      .catch((e) => {
+        stream = null;
+        cam.srcObject = null;
+        applySelfie(false);
+        camErr.innerHTML = `<b>camera unavailable</b><br>${e?.name || "denied"}`;
+        camErr.style.display = "flex";
+      });
   }
 
   function stopCamera() {
-    if (stream) { stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; cam.srcObject = null; }
+    if (!stream) return;
+    stream.getTracks().forEach((t) => {
+      t.stop();
+    });
+    stream = null;
+    cam.srcObject = null;
   }
 
   function switchCamera(dir) {
-    if (cams.length <= 1) { toast("1 camera only"); return; }
+    if (cams.length <= 1) return toast("1 camera only");
     var ni = (camIndex + dir + cams.length) % cams.length;
     var label = cams[ni].label;
     switchPulse.textContent = dir > 0 ? "»" : "«";
     switchPulse.classList.add("show");
-    setTimeout(function () { switchPulse.classList.remove("show"); }, 220);
-    startCamera(ni).then(function () { toast(label); });
+    setTimeout(() => switchPulse.classList.remove("show"), 220);
+    startCamera(ni).then(() => toast(label));
   }
 
-  /* ---------- capture + storage ---------- */
   function capture() {
-    if (!stream || cam.readyState < 2) { toast("no camera"); return; }
-    var vw = cam.videoWidth || 320, vh = cam.videoHeight || 240;
-    var cap = 640, scale = Math.min(1, cap / Math.max(vw, vh));
-    var cw = Math.round(vw * scale), ch = Math.round(vh * scale);
-    var cnv = document.createElement("canvas");
-    cnv.width = cw; cnv.height = ch;
-    var ctx = cnv.getContext("2d");
-    if (cam.classList.contains("flip")) { ctx.translate(cw, 0); ctx.scale(-1, 1); }
-    ctx.drawImage(cam, 0, 0, cw, ch);
-    var url = cnv.toDataURL("image/jpeg", 0.7);
+    if (!stream || !cam.videoWidth) return toast("no camera");
+    if (isSelfie && flashOn) {
+      screenFlash.classList.add("on");
+      setTimeout(() => {
+        runCapture(true);
+        setTimeout(() => screenFlash.classList.remove("on"), 60);
+      }, 180);
+    } else runCapture(false);
+  }
 
-    flash.classList.add("fire");
-    requestAnimationFrame(function () {
-      flash.classList.remove("fire");
-    });
-    document.getElementById("shutter").classList.add("fire");
-    setTimeout(function () { document.getElementById("shutter").classList.remove("fire"); }, 90);
-
-    savePhoto(url);
-    toast("saved (" + photos.length + ")", 900);
+  function runCapture(skipFlashAnim) {
+    var dataUrl;
+    try {
+      var vw = cam.videoWidth;
+      var scale = Math.min(1, 640 / Math.max(vw, cam.videoHeight));
+      var cnv = document.createElement("canvas");
+      cnv.width = Math.round(vw * scale);
+      cnv.height = Math.round(cam.videoHeight * scale);
+      var ctx = cnv.getContext("2d");
+      if (cam.classList.contains("flip")) {
+        ctx.translate(cnv.width, 0);
+        ctx.scale(-1, 1);
+      }
+      ctx.drawImage(cam, 0, 0, cnv.width, cnv.height);
+      dataUrl = cnv.toDataURL("image/jpeg", 0.7);
+    } catch (e) {
+      return toast(`capture failed: ${e?.name || "error"}`, 2000);
+    }
+    if (!skipFlashAnim) {
+      flash.classList.add("fire");
+      requestAnimationFrame(() => flash.classList.remove("fire"));
+    }
+    shutter.classList.add("fire");
+    setTimeout(() => shutter.classList.remove("fire"), 90);
+    savePhoto(dataUrl);
   }
 
   function loadPhotos() {
-    return Promise.resolve().then(function () {
-      var raw = storage.getItem(INDEX_KEY);
-      var ids = raw ? JSON.parse(unb64(raw)) : [];
-      photos = ids.map(function (id) {
-        var v = storage.getItem("cam_photo_" + id);
-        return v ? { id: id, url: unb64(v) } : null;
-      }).filter(Boolean);
-    }).catch(function () { photos = []; });
+    return store
+      .getItem(INDEX_KEY)
+      .then((raw) => {
+        var ids = raw ? JSON.parse(atob(raw)) : [];
+        return Promise.all(
+          ids.map((id) =>
+            store
+              .getItem(`cam_photo_${id}`)
+              .then((v) => (v ? { id, url: `data:image/jpeg;base64,${v}` } : null)),
+          ),
+        );
+      })
+      .then((arr) => (photos = arr.filter(Boolean)))
+      .catch(() => (photos = []));
   }
 
   function persistIndex() {
-    var ids = photos.map(function (p) { return p.id; });
-    storage.setItem(INDEX_KEY, b64(JSON.stringify(ids)));
+    return store.setItem(INDEX_KEY, btoa(JSON.stringify(photos.map((p) => p.id))));
   }
 
-  function savePhoto(url) {
-    var id = "p" + Date.now().toString(36);
-    try {
-      storage.setItem("cam_photo_" + id, b64(url));
-      photos.unshift({ id: id, url: url });
-      if (photos.length > MAX_PHOTOS) {
-        var dropped = photos.splice(MAX_PHOTOS);
-        dropped.forEach(function (p) { storage.removeItem("cam_photo_" + p.id); });
-      }
-      persistIndex();
-    } catch (e) {
-      photos = photos.filter(function (p) { return p.id !== id; });
-      toast("storage full");
+  function savePhoto(dataUrl) {
+    var id = `p${Date.now().toString(36)}`;
+    var b64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
+    function attempt(retries) {
+      return store.setItem(`cam_photo_${id}`, b64).then(
+        () => {
+          photos.unshift({ id, url: dataUrl });
+          return persistIndex();
+        },
+        (e) => {
+          if (
+            retries > 0 &&
+            photos.length &&
+            /quota|exceed|space/i.test(`${e?.name || ""} ${e?.message || ""}`)
+          ) {
+            var oldest = photos.pop();
+            store.removeItem(`cam_photo_${oldest.id}`);
+            return attempt(retries - 1);
+          }
+          throw e;
+        },
+      );
     }
+    attempt(3).catch((e) => toast(`save failed: ${e?.name || "error"}`, 2000));
   }
 
-  function deletePhoto(idx) {
-    if (idx < 0 || idx >= photos.length) return;
-    storage.removeItem("cam_photo_" + photos[idx].id);
-    photos.splice(idx, 1);
+  function deleteSelected() {
+    if (!selected.size) return toast("select photos first");
+    var n = selected.size;
+    photos.forEach((p) => {
+      if (selected.has(p.id)) store.removeItem(`cam_photo_${p.id}`);
+    });
+    photos = photos.filter((p) => !selected.has(p.id));
+    selected.clear();
+    sel = Math.min(sel, Math.max(0, photos.length - 1));
     persistIndex();
+    toast(`deleted ${n}`);
+    renderGrid();
   }
 
-  /* ---------- gallery rendering ---------- */
+  function updateSelBar() {
+    $("screen-grid").classList.toggle("has-sel", selected.size > 0);
+    $("gal-meta").textContent = selected.size
+      ? `${selected.size}/${photos.length}`
+      : `${photos.length}`;
+  }
+
+  function bindCard(el, idx) {
+    var t = null;
+    var fired = false;
+    var sx = 0;
+    var sy = 0;
+    var up = () => {
+      if (t) {
+        clearTimeout(t);
+        t = null;
+      }
+    };
+    el.onpointerdown = (e) => {
+      if (e.button && e.button !== 0) return;
+      fired = false;
+      sx = e.clientX;
+      sy = e.clientY;
+      t = setTimeout(() => {
+        t = null;
+        fired = true;
+        onCardLong(idx);
+      }, 480);
+    };
+    el.onpointermove = (e) => {
+      if (t && (Math.abs(e.clientX - sx) > 10 || Math.abs(e.clientY - sy) > 10)) up();
+    };
+    el.onpointerup = up;
+    el.onpointercancel = up;
+    el.onpointerleave = up;
+    el.onclick = () => {
+      if (fired) {
+        fired = false;
+        return;
+      }
+      sel = idx;
+      showFull(idx);
+    };
+  }
+
+  function onCardLong(idx) {
+    sel = idx;
+    if (selected.size) return showFull(idx);
+    selected.add(photos[idx].id);
+    grid.children[idx]?.classList.add("sel");
+    updateSelBar();
+    toast("selected (1)");
+  }
+
   function renderGrid() {
-    document.getElementById("gal-meta").textContent = photos.length;
+    updateSelBar();
     if (!photos.length) {
-      grid.innerHTML = '<div class="empty">no photos yet<br>PTT to capture<br>in camera mode</div>';
+      grid.innerHTML = '<div class="empty">no photos yet<br>tap the camera icon</div>';
       return;
     }
-    if (sel >= photos.length) sel = photos.length - 1;
+    sel = Math.min(Math.max(0, sel), photos.length - 1);
     grid.innerHTML = "";
-    photos.forEach(function (p, i) {
-      var d = document.createElement("div");
-      d.className = "thumb" + (i === sel ? " sel" : "");
-      var img = document.createElement("img");
+    photos.forEach((p, i) => {
+      var d = grid.appendChild(document.createElement("div"));
+      d.className = `card${selected.has(p.id) ? " sel" : ""}`;
+      var img = d.appendChild(document.createElement("img"));
       img.src = p.url;
-      d.appendChild(img);
-      grid.appendChild(d);
+      bindCard(d, i);
     });
+    grid.children[sel]?.scrollIntoView({ block: "nearest" });
   }
 
   function showFull(i) {
     fullIdx = (i + photos.length) % photos.length;
-    document.getElementById("full-img").src = photos[fullIdx].url;
-    document.getElementById("full-meta").textContent = (fullIdx + 1) + "/" + photos.length;
+    $("full-img").src = photos[fullIdx].url;
+    $("full-meta").textContent = `${fullIdx + 1}/${photos.length}`;
     setMode("full");
   }
 
-  /* ---------- wheel debounce: one notch = one action ---------- */
   function wheel(dir) {
     var now = Date.now();
-    var cooldown = mode === "capture" ? 180 : 110;
-    if (now - lastWheel < cooldown) return;
+    if (now - lastWheel < (mode === "capture" ? 180 : 110)) return;
     lastWheel = now;
-
-    if (mode === "capture") {
-      switchCamera(dir);
-    } else if (mode === "grid") {
+    if (mode === "capture") switchCamera(dir);
+    else if (mode === "grid") {
       sel = (sel + dir + photos.length) % photos.length;
       renderGrid();
-    } else if (mode === "full") {
-      showFull(fullIdx + dir);
-    }
+    } else showFull(fullIdx + dir);
   }
 
   function ptt() {
     if (mode === "capture") capture();
-    else if (mode === "grid") { if (photos.length) showFull(sel); }
-    else if (mode === "full") { renderGrid(); setMode("grid"); }
-  }
-
-  function longPress() {
-    if (mode === "capture") { renderGrid(); setMode("grid"); }
-    else if (mode === "grid") { setMode("capture"); startCamera(camIndex); }
-    else if (mode === "full") {
-      deletePhoto(fullIdx);
-      toast("deleted");
-      if (photos.length) showFull(Math.min(fullIdx, photos.length - 1));
-      else { renderGrid(); setMode("grid"); }
+    else if (mode === "grid") photos.length && showFull(sel);
+    else {
+      renderGrid();
+      setMode("grid");
     }
   }
 
-  /* ---------- hardware bindings ---------- */
-  window.addEventListener("scrollUp", function () { wheel(1); });
-  window.addEventListener("scrollDown", function () { wheel(-1); });
-  window.addEventListener("sideClick", ptt);
-  window.addEventListener("longPressEnd", longPress);
-
-  /* ---------- desktop test harness ---------- */
-  if (!hasSDK) {
-    document.body.classList.add("dev");
-    document.getElementById("shutter").addEventListener("click", ptt);
-    document.getElementById("devbar").addEventListener("click", function (e) {
-      var d = e.target.getAttribute("data-d");
-      if (d === "up") wheel(1);
-      else if (d === "down") wheel(-1);
-      else if (d === "ptt") ptt();
-      else if (d === "long") longPress();
-    });
-    window.addEventListener("keydown", function (e) {
-      if (e.key === "ArrowUp") wheel(1);
-      else if (e.key === "ArrowDown") wheel(-1);
-      else if (e.key === " " || e.key === "Enter") { e.preventDefault(); ptt(); }
-      else if (e.key.toLowerCase() === "g") longPress();
-    });
+  function longPress() {
+    if (mode === "capture") {
+      renderGrid();
+      setMode("grid");
+    } else if (mode === "grid") exitToCapture();
+    else {
+      var p = photos[fullIdx];
+      photos.splice(fullIdx, 1);
+      persistIndex();
+      store.removeItem(`cam_photo_${p.id}`);
+      toast("deleted");
+      if (photos.length) showFull(Math.min(fullIdx, photos.length - 1));
+      else {
+        renderGrid();
+        setMode("grid");
+      }
+    }
   }
 
-  /* ---------- boot ---------- */
+  R1.bindControls({ wheel, ptt, longPress, devbar: "devbar" });
+  if (!R1.hasSDK) shutter.addEventListener("click", ptt);
+
+  $("to-gallery").addEventListener("click", () => {
+    renderGrid();
+    setMode("grid");
+  });
+  $("to-camera").addEventListener("click", exitToCapture);
+  flashToggle.addEventListener("click", () => {
+    flashOn = !flashOn;
+    flashToggle.classList.toggle("on", flashOn);
+  });
+  $("sel-all").addEventListener("click", () => {
+    photos.forEach((p) => {
+      selected.add(p.id);
+    });
+    renderGrid();
+  });
+  $("clear-sel").addEventListener("click", () => {
+    if (!selected.size) return;
+    selected.clear();
+    renderGrid();
+    toast("cleared");
+  });
+  $("del-sel").addEventListener("click", deleteSelected);
+
   function boot() {
-    loadPhotos().then(function () {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    loadPhotos().then(() => {
+      if (!navigator.mediaDevices?.getUserMedia) {
         camErr.innerHTML = "<b>no camera api</b><br>this webview has no<br>getUserMedia";
         camErr.style.display = "flex";
         return;
       }
-      discover().then(function () { return startCamera(0); }).then(function () {
-        toast(cams.length + " camera" + (cams.length === 1 ? "" : "s"));
-      });
+      discover().then(() => startCamera(0));
     });
   }
   document.addEventListener("DOMContentLoaded", boot);

@@ -10,34 +10,53 @@
 </head>
 <body>
 
-  <!-- CAPTURE -->
   <section id="screen-capture" class="screen active">
     <div class="topbar">
-      <span class="tag">cam</span>
-      <span class="meta" id="cam-meta">—</span>
-      <span class="hint">hold: gallery</span>
+      <button class="topbtn" id="to-gallery" aria-label="gallery">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <rect x="3" y="3" width="7" height="7" rx="1.5"/>
+          <rect x="14" y="3" width="7" height="7" rx="1.5"/>
+          <rect x="3" y="14" width="7" height="7" rx="1.5"/>
+          <rect x="14" y="14" width="7" height="7" rx="1.5"/>
+        </svg>
+      </button>
     </div>
     <div id="viewfinder">
       <video id="cam" autoplay playsinline muted></video>
-      <div class="vf-overlay"><div class="reticle"></div></div>
+      <div class="guides"></div>
       <div class="switch-pulse" id="switch-pulse"></div>
       <div class="flash" id="flash"></div>
       <div class="err" id="cam-err" style="display:none"></div>
+      <div class="screen-flash" id="screen-flash"></div>
     </div>
-    <div class="shutter"><div class="shutter-btn" id="shutter"></div></div>
+    <div class="shutter">
+      <button class="iconbtn" id="flash-toggle" aria-label="flash" style="display:none">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true">
+          <path d="M13 2 4 14h7l-1 8 9-12h-7z"/>
+        </svg>
+      </button>
+      <div class="shutter-btn" id="shutter"></div>
+    </div>
   </section>
 
-  <!-- GALLERY GRID -->
   <section id="screen-grid" class="screen">
     <div class="topbar">
-      <span class="tag">gallery</span>
-      <span class="meta" id="gal-meta">0</span>
-      <span class="hint">hold: camera</span>
+      <span class="count" id="gal-meta">0</span>
+      <button class="topbtn" id="to-camera" aria-label="back to camera">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L19 6a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+          <circle cx="12" cy="12.5" r="3.2"/>
+        </svg>
+      </button>
     </div>
     <div class="grid" id="grid"></div>
+    <div class="gal-bar">
+      <button class="gal-btn" id="sel-all">all</button>
+      <button class="gal-btn" id="clear-sel">unselect</button>
+      <button class="gal-btn danger" id="del-sel">delete</button>
+    </div>
   </section>
 
-  <!-- GALLERY FULLSCREEN -->
   <section id="screen-full" class="screen">
     <div class="topbar">
       <span class="tag">photo</span>
@@ -56,6 +75,8 @@
     <button data-d="long">LONG</button>
   </div>
 
+  <script src="../../lib/shared/core.js"></script>
+  <script src="../../lib/shared/store.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
