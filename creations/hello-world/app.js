@@ -1,43 +1,31 @@
-const hasSDK = typeof PluginMessageHandler !== 'undefined';
+const counterEl = R1.$("counter");
+const statusEl = R1.$("status");
 let count = 0;
-const counterEl = document.getElementById('counter');
-const statusEl = document.getElementById('status');
+const flashStatus = (text) => R1.toast(statusEl, text, 1500);
 
-function flashStatus(text) {
-  statusEl.textContent = text;
-  statusEl.classList.add('show');
-  clearTimeout(flashStatus._t);
-  flashStatus._t = setTimeout(() => statusEl.classList.remove('show'), 1500);
-}
-
-window.addEventListener('scrollUp', () => {
-  count++;
-  counterEl.textContent = 'scroll: ' + count;
-});
-
-window.addEventListener('scrollDown', () => {
-  count--;
-  counterEl.textContent = 'scroll: ' + count;
-});
-
-window.addEventListener('sideClick', () => {
-  if (hasSDK) {
-    PluginMessageHandler.postMessage(JSON.stringify({
-      message: 'Say hello world, in one short cheerful sentence.',
-      useLLM: true,
-      wantsR1Response: true
-    }));
-    flashStatus('speaking...');
+function ptt() {
+  if (R1.hasSDK) {
+    PluginMessageHandler.postMessage(
+      JSON.stringify({
+        message: "Say hello world, in one short cheerful sentence.",
+        useLLM: true,
+        wantsR1Response: true,
+      }),
+    );
+    flashStatus("speaking...");
   } else {
-    flashStatus('open on r1');
+    flashStatus("open on r1");
   }
+}
+
+R1.bindControls({
+  wheel: (d) => {
+    count += d;
+    counterEl.textContent = `scroll: ${count}`;
+  },
+  ptt,
 });
 
-window.onPluginMessage = function (data) {
-  flashStatus('got reply');
-};
+window.onPluginMessage = () => flashStatus("got reply");
 
-if (!hasSDK) {
-  document.getElementById('hint').textContent =
-    'run on an r1 device to enable hardware + voice';
-}
+if (!R1.hasSDK) R1.$("hint").textContent = "run on an r1 device to enable hardware + voice";
